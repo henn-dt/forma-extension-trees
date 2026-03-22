@@ -6,9 +6,9 @@
 import { useState } from 'react';
 import { Forma } from 'forma-embedded-view-sdk/auto';
 import type { HSVThresholds, DetectionParameters, TreeDetectionResult } from '../types/treeDetection.types';
-import type { Model3DGenerationResult } from '../types/model3D.types';
 import { detectTrees } from '../services/treeDetection.service';
-import { generate3DModel } from '../services/modelGeneration.service';
+import { generate3DModelAndDownload } from '../services/modelGeneration.service';
+import type { ModelDownloadResult } from '../services/modelGeneration.service';
 import { getElevationsForTrees } from '../services/elevation.service';
 import type { BBox } from '../types/geometry.types';
 
@@ -46,7 +46,7 @@ export function useTreePipeline() {
   const [hsvThresholds, setHsvThresholds] = useState<HSVThresholds>(DEFAULT_HSV);
   const [detectionParams, setDetectionParams] = useState<DetectionParameters>(DEFAULT_PARAMS);
   const [detectionResult, setDetectionResult] = useState<TreeDetectionResult | null>(null);
-  const [modelResult, setModelResult] = useState<Model3DGenerationResult | null>(null);
+  const [modelResult, setModelResult] = useState<ModelDownloadResult | null>(null);
   const [isDetecting, setIsDetecting] = useState<boolean>(false);
   const [isGeneratingModel, setIsGeneratingModel] = useState<boolean>(false);
   const [treesWithElevation, setTreesWithElevation] = useState<TreeWithElevation[] | null>(null);
@@ -145,7 +145,7 @@ export function useTreePipeline() {
    * 
    * @param bbox - Terrain bounding box for model dimensions
    */
-  const generateModel = async (bbox: BBox): Promise<void> => {
+  const generateModel = async (): Promise<void> => {
     if (!detectionResult) {
       setStatus("❌ No detection results to generate model");
       return;
@@ -156,26 +156,11 @@ export function useTreePipeline() {
     setIsGeneratingModel(true);
 
     try {
-      // Collect all trees (individual + populated from clusters)
-      const allTrees = [
-        ...detectionResult.individualTrees,
-        ...detectionResult.treeClusters.flatMap(cluster => cluster.populatedTrees)
-      ];
-
-      console.log('Generating model with trees:', allTrees.length);
-
-      const request = {
-        trees: allTrees,
-        bbox: {
-          width: Math.abs(bbox.east - bbox.west),
-          height: Math.abs(bbox.north - bbox.south)
-        }
-      };
-
-      const result = await generate3DModel(request);
+      // Send the complete detection result JSON to the backend
+      const result = await generate3DModelAndDownload(detectionResult as unknown as Record<string, unknown>);
       setModelResult(result);
-      setStatus(`✅ 3D model generated (${result.metadata.totalTrees} trees, ${result.metadata.totalFaces} faces)`);
-      
+      setStatus(`✅ Model downloaded: ${result.filename} (${result.totalTrees} trees, ${result.totalFaces} faces)`);
+
       console.log('Model generation completed:', result);
     } catch (err) {
       console.error("3D model generation failed:", err);

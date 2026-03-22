@@ -92,6 +92,29 @@
             border-color: #f5510a;
         }
 
+        .password-field {
+            position: relative;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+        }
+
+        .password-toggle:hover {
+            color: #333;
+        }
+
         .btn {
             width: 100%;
             padding: 14px;
@@ -141,6 +164,47 @@
         .link a:hover {
             text-decoration: underline;
         }
+
+        .consent-group {
+            margin: 20px 0;
+            padding: 16px;
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+
+        .consent-group label {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin: 0;
+            font-weight: normal;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #444;
+            cursor: pointer;
+        }
+
+        .consent-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-top: 2px;
+            flex-shrink: 0;
+            cursor: pointer;
+            accent-color: #f5510a;
+        }
+
+        .consent-group .consent-highlight {
+            font-weight: 500;
+            color: #1a1a1a;
+        }
+
+        .consent-error {
+            color: #c33;
+            font-size: 12px;
+            margin-top: 8px;
+            display: none;
+        }
     </style>
 </head>
 
@@ -165,12 +229,38 @@
 
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" placeholder="At least 6 characters" required>
+                <div class="password-field">
+                    <input type="password" id="password" placeholder="At least 6 characters" required>
+                    <button type="button" class="password-toggle" onclick="togglePassword('password', this)" aria-label="Toggle password visibility">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             <div class="form-group">
                 <label for="confirmPassword">Confirm Password</label>
-                <input type="password" id="confirmPassword" placeholder="Re-enter password" required>
+                <div class="password-field">
+                    <input type="password" id="confirmPassword" placeholder="Re-enter password" required>
+                    <button type="button" class="password-toggle" onclick="togglePassword('confirmPassword', this)" aria-label="Toggle password visibility">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="consent-group">
+                <label for="dataConsent">
+                    <input type="checkbox" id="dataConsent">
+                    <span>
+                        I agree to the storage of my <span class="consent-highlight">personal data (name, email, and projects I work on)</span> on HENN's servers in Germany. HENN will not share my personal information with any third parties.
+                    </span>
+                </label>
+                <div class="consent-error" id="consentError">You must agree to data storage to create an account.</div>
             </div>
 
             <button type="submit" class="btn" id="submitBtn">Create Account</button>
@@ -182,6 +272,15 @@
     </div>
 
     <script>
+        function togglePassword(inputId, btn) {
+            const input = document.getElementById(inputId);
+            const isPassword = input.type === 'password';
+            input.type = isPassword ? 'text' : 'password';
+            btn.innerHTML = isPassword
+                ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+                : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+        }
+
         // Preserve query params in the login link
         document.getElementById('loginLink').href = 'login.html' + window.location.search;
 
@@ -189,14 +288,30 @@
         const errorDiv = document.getElementById('error');
         const submitBtn = document.getElementById('submitBtn');
 
+        const consentCheckbox = document.getElementById('dataConsent');
+        const consentError = document.getElementById('consentError');
+
+        // Hide consent error when checkbox is checked
+        consentCheckbox.addEventListener('change', () => {
+            if (consentCheckbox.checked) {
+                consentError.style.display = 'none';
+            }
+        });
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             errorDiv.style.display = 'none';
+            consentError.style.display = 'none';
 
             const name = document.getElementById('name').value;
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const confirmPassword = document.getElementById('confirmPassword').value;
+
+            if (!consentCheckbox.checked) {
+                consentError.style.display = 'block';
+                return;
+            }
 
             if (password !== confirmPassword) {
                 errorDiv.textContent = 'Passwords do not match';

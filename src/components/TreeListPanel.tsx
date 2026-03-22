@@ -162,13 +162,11 @@ export function TreeListPanel({
     setIsDownloadingOBJ(true);
     try {
       console.log('📦 Requesting 3D model generation...');
-      
-      // Call backend with detection data
+
+      // Step 1: Generate model (Python saves to temp file, returns JSON metadata)
       const response = await fetch('api/generate-model', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(detectionResult)
       });
 
@@ -177,44 +175,24 @@ export function TreeListPanel({
         throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
       }
 
-      // Check if it's a JSON response (large model saved to Downloads) or OBJ content
-      const contentType = response.headers.get('content-type');
-      
-      if (contentType?.includes('application/json')) {
-        // Large model - already saved to Downloads folder
-        const data = await response.json();
-        console.log('✅ Large model saved to Downloads folder:', data);
-        alert(`✅ Large model generated!\n\n` +
-              `📁 Saved to: Downloads/${data.filename}\n` +
-              `📊 Trees: ${data.total_trees?.toLocaleString()}\n` +
-              `💾 Size: ${data.filesize_mb}MB\n\n` +
-              `⚠️ Warning: This is a large file. It may take time to open in 3D software.`);
-      } else {
-        // Normal model - download as blob
-        const objContent = await response.text();
-        console.log('✅ Model generated, size:', objContent.length, 'bytes');
+      const data = await response.json();
 
-        // Create blob and download
-        const blob = new Blob([objContent], { type: 'model/obj' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        
-        // Generate filename with timestamp
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-        link.download = `trees_model_${timestamp}.obj`;
-        
-        // Trigger download
-        document.body.appendChild(link);
-        link.click();
-        
-        // Cleanup
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        
-        console.log('✅ OBJ file downloaded successfully');
+      if (!data.success || !data.filename) {
+        throw new Error('Model generation failed');
       }
-      
+
+      console.log(`✅ Model generated: ${data.filename} (${(data.fileSize / 1024 / 1024).toFixed(1)} MB)`);
+
+      // Step 2: Trigger download via anchor tag pointing to download endpoint
+      const link = document.createElement('a');
+      link.href = `api/download-model/${encodeURIComponent(data.filename)}`;
+      link.download = data.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      console.log('📥 Download triggered');
+
     } catch (error) {
       console.error('❌ OBJ download failed:', error);
       alert(`Failed to download OBJ file: ${error instanceof Error ? error.message : 'Unknown error'}`);

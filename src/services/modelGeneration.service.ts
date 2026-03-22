@@ -1,93 +1,73 @@
 /**
  * 3D model generation service - API calls to Python backend for 3D model creation
- * 
+ *
+ * Two-step process:
+ * 1. POST /api/generate-model → generates OBJ, saves on server, returns JSON metadata
+ * 2. Browser navigates to /api/download-model/:filename → streams the file download
+ *
  * Uses relative URLs (/api/*) which work in both:
  * - Development: Vite proxy forwards to localhost:3001
  * - Production: nginx proxy forwards to backend container
  */
 
-import type { 
-  Model3DRequest, 
-  Model3DGenerationResult 
-} from '../types/model3D.types';
-
-// Use relative URL (empty string) - automatically uses /api/* paths
-// This works in both development and production:
-// - Dev: Vite proxy (in vite.config.ts) forwards /api/* → localhost:3001
-// - Prod: nginx forwards /api/* → backend container on port 8012
-// By using relative URLs, the same build works everywhere without env var changes
-const API_BASE_URL = '';
-
-/**
- * Generate 3D model from detected trees
- * 
- * @param request - Tree data and terrain dimensions
- * @returns 3D model files (OBJ, MTL, textures) with metadata
- */
-export async function generate3DModel(
-  request: Model3DRequest
-): Promise<Model3DGenerationResult> {
-  console.log('🏗️ Calling 3D model generation API...');
-  console.log('Trees to generate:', request.trees.length);
-  console.log('Terrain dimensions:', request.bbox);
-
-  try {
-    const response = await fetch('api/generate-model', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || `3D model generation failed (${response.status})`);
-    }
-
-    const result = await response.json();
-    console.log('✅ 3D model generated:', result);
-    return result;
-  } catch (err) {
-    console.error('❌ 3D model generation error:', err);
-    throw err;
-  }
+export interface ModelDownloadResult {
+  filename: string;
+  fileSize: number;
+  totalTrees: number;
+  totalVertices: number;
+  totalFaces: number;
 }
 
 /**
- * Download 3D model file to user's computer
- * 
- * @param url - URL to model file (OBJ, MTL, texture)
- * @param filename - Desired filename for download
+ * Generate 3D model from detected trees and trigger browser download
  */
-export function downloadModel(url: string, filename: string): void {
-  console.log('⬇️ Downloading model:', filename);
-  
+export async function generate3DModelAndDownload(
+  detectionData: Record<string, unknown>
+): Promise<ModelDownloadResult> {
+  console.log('🏗️ Calling 3D model generation API...');
+
+  // Step 1: Generate the model (returns JSON metadata, file saved on server)
+  const response = await fetch('api/generate-model', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(detectionData),
+  });
+
+  if (!response.ok) {
+    let errorMessage = `3D model generation failed (${response.status})`;
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.message || errorData.detail || errorMessage;
+    } catch {
+      // not JSON
+    }
+    throw new Error(errorMessage);
+  }
+
+  const result = await response.json();
+
+  if (!result.success || !result.filename) {
+    throw new Error(result.message || 'Model generation failed');
+  }
+
+  console.log(`✅ Model generated: ${result.filename} (${(result.fileSize / 1024 / 1024).toFixed(1)} MB)`);
+
+  // Step 2: Trigger download via hidden anchor pointing to the download endpoint
+  const downloadUrl = `api/download-model/${encodeURIComponent(result.filename)}`;
   const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
+  link.href = downloadUrl;
+  link.download = result.filename;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  
-  console.log('✅ Download initiated');
-}
 
-/**
- * Get model generation status (for async/polling operations - future use)
- * 
- * @param modelId - Model ID from initial generation request
- * @returns Model generation result or status update
- */
-export async function getModelStatus(modelId: string): Promise<Model3DGenerationResult> {
-  console.log('🔍 Checking model generation status:', modelId);
+  console.log(`📥 Download triggered: ${result.filename}`);
 
-  const response = await fetch(`api/generate-model/${modelId}`);
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to get model status');
-  }
-
-  return await response.json();
+  return {
+    filename: result.filename,
+    fileSize: result.fileSize,
+    totalTrees: result.totalTrees,
+    totalVertices: result.totalVertices,
+    totalFaces: result.totalFaces,
+  };
 }

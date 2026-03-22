@@ -65,7 +65,7 @@ app.use(cors({
   },
   credentials: true,
   // Expose headers needed for file downloads
-  exposedHeaders: ['Content-Disposition']
+  exposedHeaders: ['Content-Disposition', 'X-Total-Trees', 'X-Total-Vertices', 'X-Total-Faces']
 }));
 app.use(express.json({ limit: '50mb' })); // Increase limit for base64 image data
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -312,17 +312,15 @@ app.post('/api/detect-trees', upload.single('image'), async (req, res) => {
   }
 });
 
-// Phase 3.4 - 3D model generation endpoint (OBJ file download)
+// Phase 3.4 - 3D model generation endpoint
+// Step 1: POST generates the OBJ and saves it on the Python server, returns JSON metadata
+// Step 2: GET /api/download-model/:filename serves the file
 app.post('/api/generate-model', async (req, res) => {
   try {
     console.log('🏗️ Generating 3D model from tree detection data...');
 
-    // Validate detection data
     if (!req.body) {
-      return res.status(400).json({
-        error: 'No detection data provided',
-        message: 'Please provide tree detection results'
-      });
+      return res.status(400).json({ error: 'No detection data provided' });
     }
 
     console.log('Detection data:', {
@@ -331,58 +329,67 @@ app.post('/api/generate-model', async (req, res) => {
       totalPopulated: req.body.summary?.totalPopulatedTrees || 0
     });
 
-    // Forward detection JSON to Python
+    // Forward to Python - returns JSON metadata (not the file itself)
     const pythonResponse = await axios.post(
       `${PYTHON_API_URL}/generate-model`,
-      req.body,  // Send complete detection JSON
+      req.body,
       {
-        timeout: 300000,  // 5 minutes timeout for large models
+        timeout: 600000,  // 10 minutes for large model generation
         maxBodyLength: Infinity,
         maxContentLength: Infinity
       }
     );
 
-    console.log('✅ Model generated successfully');
-
-    // For very large models (>20k trees), Python saves to Downloads and returns JSON
-    if (pythonResponse.data.filepath) {
-      console.log('Large model saved to Downloads:', pythonResponse.data);
-
-      // Return JSON response (model already in Downloads folder)
-      res.json(pythonResponse.data);
-    } else {
-      // Small/medium models - return OBJ content directly
-      res.set({
-        'Content-Type': 'model/obj',
-        'Content-Disposition': 'attachment; filename=trees_model.obj'
-      });
-      res.send(pythonResponse.data);
-    }
+    console.log('✅ Model generated:', pythonResponse.data);
+    res.json(pythonResponse.data);
 
   } catch (error) {
     console.error('❌ Model generation error:', error.message);
 
     if (error.response && error.response.data) {
-      // Python returned an error
-      console.error('Python error response:', error.response.data);
       res.status(error.response.status).json({
         error: 'Model generation failed',
-        message: error.response.data.detail || error.response.data.error || error.message,
-        pythonError: error.response.data
+        message: error.response.data.detail || error.message
       });
     } else if (error.code === 'ECONNREFUSED') {
-      // Python backend not running
       res.status(503).json({
         error: 'Python backend unavailable',
-        message: 'Model generation service is not running. Please start the Python backend on port 5001.',
         hint: 'Run: cd python_backend && python main.py'
       });
     } else {
-      // Other error (including "string too long" errors)
-      res.status(500).json({
-        error: 'Internal server error',
-        message: error.message
-      });
+      res.status(500).json({ error: 'Internal server error', message: error.message });
+    }
+  }
+});
+
+// Step 2: Download a generated model file (proxied from Python)
+app.get('/api/download-model/:filename', async (req, res) => {
+  try {
+    const { filename } = req.params;
+    console.log(`📥 Downloading model: ${filename}`);
+
+    // Proxy the download from Python using a stream
+    const pythonResponse = await axios.get(
+      `${PYTHON_API_URL}/download-model/${encodeURIComponent(filename)}`,
+      { responseType: 'stream', timeout: 600000 }
+    );
+
+    // Forward headers
+    res.set({
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': pythonResponse.headers['content-disposition'] || `attachment; filename=${filename}`,
+      'Content-Length': pythonResponse.headers['content-length'] || ''
+    });
+
+    // Pipe directly - no buffering
+    pythonResponse.data.pipe(res);
+
+  } catch (error) {
+    console.error('❌ Download error:', error.message);
+    if (error.response) {
+      res.status(error.response.status).json({ error: 'Download failed', message: error.message });
+    } else {
+      res.status(500).json({ error: 'Download failed', message: error.message });
     }
   }
 });

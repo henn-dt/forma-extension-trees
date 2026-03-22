@@ -12,10 +12,9 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         // Ensure Set-Cookie from backend is rewritten to a browser-acceptable domain
-        // so session cookies issued by the backend (localhost:3001) are usable
-        // when the app is served from the dev server (localhost:5173).
-        // This rewrites cookie "Domain" to "localhost" (no port).
-        cookieDomainRewrite: 'localhost'
+        cookieDomainRewrite: 'localhost',
+        // Model generation can take minutes; download streams 200MB+
+        timeout: 600000,
       }
     }
   }

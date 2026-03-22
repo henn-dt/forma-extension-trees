@@ -8,13 +8,6 @@ interface UserInfo {
 }
 
 // SVG Icons
-const HomeIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-    <polyline points="9 22 9 12 15 12 15 22"/>
-  </svg>
-);
-
 const UserIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <circle cx="8" cy="5" r="3" fill="currentColor" />
@@ -45,11 +38,10 @@ const LogoutIcon = () => (
 );
 
 interface UserMenuProps {
-  currentPage?: 'home' | 'projects';
-  onNavigate?: (page: 'home' | 'projects') => void;
+  onShowProjects?: () => void;
 }
 
-export function UserMenu({ currentPage = 'home', onNavigate }: UserMenuProps) {
+export function UserMenu({ onShowProjects }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [showUserInfo, setShowUserInfo] = useState(false);
@@ -107,11 +99,11 @@ export function UserMenu({ currentPage = 'home', onNavigate }: UserMenuProps) {
     window.location.href = 'login.html' + queryString;
   };
 
-  const handleNavigation = (page: 'home' | 'projects') => {
+  const handleShowProjects = () => {
     setIsOpen(false);
     setShowUserInfo(false);
-    if (onNavigate) {
-      onNavigate(page);
+    if (onShowProjects) {
+      onShowProjects();
     }
   };
 
@@ -130,15 +122,6 @@ export function UserMenu({ currentPage = 'home', onNavigate }: UserMenuProps) {
       
       {isOpen && (
         <div className="dropdown-menu show">
-          {/* Home Button */}
-          <button 
-            onClick={() => handleNavigation('home')} 
-            className={`menu-item ${currentPage === 'home' ? 'active' : ''}`}
-          >
-            <HomeIcon />
-            Home
-          </button>
-          
           {/* User Information Button */}
           <button 
             onClick={() => setShowUserInfo(!showUserInfo)} 
@@ -163,9 +146,9 @@ export function UserMenu({ currentPage = 'home', onNavigate }: UserMenuProps) {
           )}
           
           {/* Projects Button */}
-          <button 
-            onClick={() => handleNavigation('projects')} 
-            className={`menu-item ${currentPage === 'projects' ? 'active' : ''}`}
+          <button
+            onClick={handleShowProjects}
+            className="menu-item"
           >
             <ProjectsIcon />
             Projects

@@ -122,24 +122,50 @@ async function fetchElevationsViaGrid<T extends TreePosition>(
   const grid = createGrid(bounds, gridSize, terrainOffsetX, terrainOffsetY);
   console.log(`   Grid size: ${gridSize}×${gridSize} = ${grid.length} points`);
 
-  // 3. Fetch elevation at each grid point
+  // 3. Fetch elevation at each grid point with concurrency
   const gridStartTime = performance.now();
-  for (let i = 0; i < grid.length; i++) {
-    try {
-      grid[i].z = await Forma.terrain.getElevationAt({
-        x: grid[i].x,
-        y: grid[i].y
-      });
+  const CONCURRENCY = 15;
+  let gridIndex = 0;
+  let completedPoints = 0;
+  let failedPoints = 0;
 
-      if (i % 100 === 0 || i === grid.length - 1) {
-        onProgress?.(i + 1, grid.length, 'Building elevation grid');
-        const progress = ((i + 1) / grid.length * 100).toFixed(0);
-        console.log(`   ⏳ Grid progress: ${progress}% (${i + 1}/${grid.length})`);
+  const fetchWorker = async () => {
+    while (true) {
+      const i = gridIndex++;
+      if (i >= grid.length) break;
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          grid[i].z = await Forma.terrain.getElevationAt({
+            x: grid[i].x,
+            y: grid[i].y
+          });
+          break;
+        } catch (error) {
+          if (attempt === 2) {
+            console.error(`Failed to get elevation for grid point ${i} after 3 attempts`);
+            grid[i].z = NaN; // Mark as failed (not 0 which could be valid)
+            failedPoints++;
+          } else {
+            await new Promise(r => setTimeout(r, 100 * (attempt + 1)));
+          }
+        }
       }
-    } catch (error) {
-      console.error(`Failed to get elevation for grid point ${i}:`, error);
-      grid[i].z = 0; // Fallback
+
+      completedPoints++;
+      if (completedPoints % 100 === 0 || completedPoints === grid.length) {
+        onProgress?.(completedPoints, grid.length, 'Building elevation grid');
+        const progress = (completedPoints / grid.length * 100).toFixed(0);
+        console.log(`   ⏳ Grid progress: ${progress}% (${completedPoints}/${grid.length})`);
+      }
     }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, grid.length) }).map(() => fetchWorker()));
+
+  if (failedPoints > 0) {
+    const failRate = ((failedPoints / grid.length) * 100).toFixed(1);
+    console.warn(`⚠️ ${failedPoints}/${grid.length} grid points failed (${failRate}%)`);
   }
 
   const gridElapsed = (performance.now() - gridStartTime) / 1000;
@@ -251,6 +277,11 @@ function bilinearInterpolate(
   // Calculate interpolation weights
   const tx = normX - safeX;
   const ty = normY - safeY;
+
+  // If any corner has NaN, propagate it (don't silently use 0)
+  if (isNaN(p00.z) || isNaN(p10.z) || isNaN(p01.z) || isNaN(p11.z)) {
+    return NaN;
+  }
 
   // Bilinear interpolation
   const z0 = p00.z * (1 - tx) + p10.z * tx;

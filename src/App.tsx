@@ -14,7 +14,7 @@ import { TerrainBoundsPanel } from './components/TerrainBoundsPanel';
 import { MapboxTilePanel } from './components/MapboxTilePanel';
 import { ExtendProjectPanel } from './components/ExtendProjectPanel';
 import { UserMenu } from './components/UserMenu';
-import { MyProjectsPage } from './components/MyProjectsPage';
+import { MyProjectsPanel } from './components/MyProjectsPanel';
 
 // Component imports - Phase 2.4 Tree Detection UI
 import { HSVControlPanel } from './components/HSVControlPanel';
@@ -27,12 +27,9 @@ import { TreePlacementTester } from './components/TreePlacementTester';
 // Utility imports for copyJSON function
 import { calculateArea, calculateDimensions } from './utils/geometry.utils';
 
-// Page type for navigation
-type AppPage = 'home' | 'projects';
-
 function App() {
-  // Page navigation state
-  const [currentPage, setCurrentPage] = useState<AppPage>('home');
+  // Projects panel overlay state
+  const [showProjectsPanel, setShowProjectsPanel] = useState(false);
 
   // Tab state - Phase 2.5
   const [activeTab, setActiveTab] = useState<'project' | 'extend' | 'trees'>('project');
@@ -119,15 +116,15 @@ function App() {
   return (
     <>
       {/* User Menu - Top Left */}
-      <UserMenu 
-        currentPage={currentPage} 
-        onNavigate={(page) => setCurrentPage(page)} 
+      <UserMenu
+        onShowProjects={() => setShowProjectsPanel(true)}
       />
-      
-      {/* Conditional Page Rendering */}
-      {currentPage === 'projects' ? (
-        <MyProjectsPage onNavigateHome={() => setCurrentPage('home')} />
-      ) : (
+
+      {/* Projects Panel Overlay */}
+      {showProjectsPanel && (
+        <MyProjectsPanel onClose={() => setShowProjectsPanel(false)} />
+      )}
+
       <div className="panel">
       <h2>Forma Tree Detection</h2>
 
@@ -496,7 +493,6 @@ function App() {
         }
       `}</style>
     </div>
-      )}
     </>
   );
 }

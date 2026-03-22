@@ -125,7 +125,7 @@ export function TreePlacementTester({ treesWithElevation, disablePlacement = fal
     densityPercent: number
   ): NonNullable<typeof treesWithElevation> {
     if (!trees || trees.length === 0) return [];
-    if (densityPercent >= 100) return trees;
+    if (densityPercent >= 100) return [...trees].sort(() => Math.random() - 0.5);
 
     const { clusters, individuals } = groupTreesByCentroid(trees);
     const { largeClusters, smallClusters } = categorizeClustersBySize(clusters);
@@ -205,8 +205,14 @@ export function TreePlacementTester({ treesWithElevation, disablePlacement = fal
       const { blobId } = await getTreeBlobId();
       console.log('Tree model ready, blobId:', blobId);
 
-      // 5. Select trees based on density
-      const filteredTrees = treesWithElevation.filter(tree => tree.z !== undefined && tree.z !== null);
+      // 5. Select trees based on density (filter out invalid elevations)
+      const filteredTrees = treesWithElevation.filter(tree =>
+        tree.z !== undefined && tree.z !== null && !isNaN(tree.z) && tree.z !== 0
+      );
+      const invalidCount = treesWithElevation.length - filteredTrees.length;
+      if (invalidCount > 0) {
+        console.warn(`⚠️ Filtered out ${invalidCount} trees with invalid elevation (NaN or z=0)`);
+      }
       const selectedTrees = selectTreesByDensity(filteredTrees, treeDensity);
       const testTrees = selectedTrees ? selectedTrees.slice(0, MAX_TREES) : [];
 
@@ -219,14 +225,12 @@ export function TreePlacementTester({ treesWithElevation, disablePlacement = fal
       console.log(`Placing ${testTrees.length} trees with per-tree scaling...`);
 
       // ========================================
-      // INSTANCE MODE with Per-Tree Scaling
+      // BATCH PLACEMENT via updateElements
       // ========================================
-      setStatus(`Creating tree definition and placing ${testTrees.length} instances...`);
-      console.log('Using INSTANCE mode with per-tree scaling based on diameter...');
+      setStatus(`Creating tree definition...`);
+      console.log('Using BATCH mode with updateElements for fast placement...');
 
       const startTime = performance.now();
-      let totalPlaced = 0;
-      let totalFailed = 0;
 
       // STEP 1: Create ONE single tree definition
       const { urn: parentUrn } = await Forma.integrateElements.createElementV2({
@@ -243,65 +247,64 @@ export function TreePlacementTester({ treesWithElevation, disablePlacement = fal
       });
       console.log('Created tree definition:', parentUrn);
 
-      // STEP 2: Place instances with per-tree scaling
-      const CONCURRENCY = 25;
-      let workerIndex = 0;
+      // STEP 2: Build all operations upfront
+      setStatus(`Building placement data for ${testTrees.length} trees...`);
 
-      const worker = async () => {
-        while (true) {
-          const i = workerIndex++;
-          if (i >= testTrees.length) break;
+      const operations: Array<{
+        type: "add";
+        urn: string;
+        name: string;
+        transform: number[];
+      }> = testTrees.map((tree, i) => {
+        const correctedX = terrainOffsetX + tree.x;
+        const correctedY = terrainOffsetY + tree.y;
+        const correctedZ = tree.z || 0;
+        const instanceScale = computeInstanceScale(tree.estimatedDiameterM);
 
-          const tree = testTrees[i];
+        if (i < 5) {
+          const height = tree.estimatedDiameterM
+            ? (tree.estimatedDiameterM * HEIGHT_MULTIPLIER).toFixed(1)
+            : 'default';
+          console.log(`Tree ${i + 1}: diameter=${tree.estimatedDiameterM?.toFixed(1) || 'N/A'}m, height=${height}m, scale=${instanceScale.toFixed(3)}`);
+        }
 
-          // Calculate position
-          const correctedX = terrainOffsetX + tree.x;
-          const correctedY = terrainOffsetY + tree.y;
-          const correctedZ = tree.z || 0;
-
-          // Calculate per-tree scale based on detected diameter
-          const instanceScale = computeInstanceScale(tree.estimatedDiameterM);
-          
-          // Log first few trees for debugging
-          if (i < 5) {
-            const height = tree.estimatedDiameterM 
-              ? (tree.estimatedDiameterM * HEIGHT_MULTIPLIER).toFixed(1)
-              : 'default';
-            console.log(`Tree ${i + 1}: diameter=${tree.estimatedDiameterM?.toFixed(1) || 'N/A'}m, height=${height}m, scale=${instanceScale.toFixed(3)}`);
-          }
-
-          const transform: [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number] = [
+        return {
+          type: "add" as const,
+          urn: parentUrn,
+          name: `Tree ${i + 1}`,
+          transform: [
             instanceScale, 0, 0, 0,
             0, instanceScale, 0, 0,
             0, 0, instanceScale, 0,
-            correctedX,
-            correctedY,
-            correctedZ,
-            1
-          ];
+            correctedX, correctedY, correctedZ, 1
+          ]
+        };
+      });
 
-          try {
-            await Forma.proposal.addElement({
-              urn: parentUrn,
-              transform,
-              name: `Tree ${i + 1}`
-            });
-            totalPlaced++;
+      // STEP 3: Send in batches of 500 (avoid oversized single requests)
+      const BATCH_SIZE = 500;
+      let totalPlaced = 0;
+      let totalFailed = 0;
 
-            if (totalPlaced % 50 === 0 || totalPlaced === testTrees.length) {
-              const progressPercent = Math.round((totalPlaced / testTrees.length) * 100);
-              setProgress(progressPercent);
-              setStatus(`Placing trees: ${totalPlaced}/${testTrees.length} (${progressPercent}%)`);
-            }
-          } catch (addError) {
-            console.error(`Failed to add tree ${i + 1}:`, addError);
-            totalFailed++;
-          }
+      for (let start = 0; start < operations.length; start += BATCH_SIZE) {
+        const batch = operations.slice(start, start + BATCH_SIZE);
+        const batchNum = Math.floor(start / BATCH_SIZE) + 1;
+        const totalBatches = Math.ceil(operations.length / BATCH_SIZE);
+
+        setStatus(`Placing batch ${batchNum}/${totalBatches} (${batch.length} trees)...`);
+        setProgress(Math.round((start / operations.length) * 100));
+
+        try {
+          const results = await Forma.proposal.updateElements({ operations: batch });
+          const succeeded = results.filter(r => r !== null).length;
+          totalPlaced += succeeded;
+          totalFailed += batch.length - succeeded;
+          console.log(`Batch ${batchNum}/${totalBatches}: ${succeeded}/${batch.length} placed`);
+        } catch (batchError) {
+          console.error(`Batch ${batchNum} failed:`, batchError);
+          totalFailed += batch.length;
         }
-      };
-
-      // Launch workers
-      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, testTrees.length) }).map(() => worker()));
+      }
 
       const totalTime = (performance.now() - startTime) / 1000;
       console.log(`\nPlacement complete! Placed: ${totalPlaced}/${testTrees.length} (${totalFailed} failed)`);
@@ -510,7 +513,7 @@ export function TreePlacementTester({ treesWithElevation, disablePlacement = fal
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
           </svg>
-          Using Instance Mode for fast placement
+          Using Batch Mode for fast placement
         </p>
       </div>
 
