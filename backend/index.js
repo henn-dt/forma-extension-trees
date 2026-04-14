@@ -77,6 +77,11 @@ setupAuth(app);
 // Serve static files from public folder (login.html, welcome.html, etc.)
 app.use(express.static(path.join(__dirname, '../public')));
 
+// Data protection policy page (clean URL)
+app.get('/privacy', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public', 'data-protection-policy.html'));
+});
+
 // Directory paths (used for legacy tile saving - now tiles are downloaded directly by user)
 const TILES_DIR = path.join(__dirname, '../fetched_tiles');
 const SEGMENTATION_DIR = path.join(__dirname, '../segmentation_output');
