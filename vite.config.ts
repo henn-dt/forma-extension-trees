@@ -15,6 +15,12 @@ export default defineConfig({
         cookieDomainRewrite: 'localhost',
         // Model generation can take minutes; download streams 200MB+
         timeout: 600000,
+      },
+      // Data protection policy route (served by Express backend)
+      '/privacy': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false,
       }
     }
   }

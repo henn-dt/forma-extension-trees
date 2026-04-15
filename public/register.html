@@ -205,6 +205,16 @@
             margin-top: 8px;
             display: none;
         }
+
+        .policy-link {
+            color: #f5510a;
+            text-decoration: underline;
+            font-weight: 500;
+        }
+
+        .policy-link:hover {
+            color: #d94609;
+        }
     </style>
 </head>
 
@@ -257,10 +267,10 @@
                 <label for="dataConsent">
                     <input type="checkbox" id="dataConsent">
                     <span>
-                        I agree to the storage of my <span class="consent-highlight">personal data (name, email, and projects I work on)</span> on HENN's servers in Germany. HENN will not share my personal information with any third parties.
+                        I have read and agree to the <a href="privacy" target="_blank" rel="noopener noreferrer" class="policy-link">data protection policy</a>.
                     </span>
                 </label>
-                <div class="consent-error" id="consentError">You must agree to data storage to create an account.</div>
+                <div class="consent-error" id="consentError">You must agree to the data protection policy to create an account.</div>
             </div>
 
             <button type="submit" class="btn" id="submitBtn">Create Account</button>
