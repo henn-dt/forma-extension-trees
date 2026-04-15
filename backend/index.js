@@ -79,7 +79,14 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // Data protection policy page (clean URL)
 app.get('/privacy', (req, res) => {
-  res.sendFile(path.resolve(__dirname, '../public', 'data-protection-policy.html'));
+  const publicDir = path.join(__dirname, '../public');  // Same as line 84
+  const filePath = path.join(publicDir, 'data-protection-policy.html');
+  
+  console.log('🔍 Privacy route hit!');
+  console.log('   Public dir:', publicDir);
+  console.log('   Full path:', filePath);
+  
+  res.sendFile(filePath);
 });
 
 // Directory paths (used for legacy tile saving - now tiles are downloaded directly by user)
