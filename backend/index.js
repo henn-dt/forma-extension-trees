@@ -80,9 +80,25 @@ app.use(express.static(path.join(__dirname, '../public')));
 // Data protection policy page (clean URL)
 app.get('/privacy', (req, res) => {
   console.log('🔍 Privacy route hit!');
-  res.sendFile(path.join(__dirname, '../public', 'data-protection-policy.html'));
-});
-
+  const filePath = path.join(__dirname, '../public', 'data-protection-policy.html');
+  
+  // Add explicit check
+  if (!fs.existsSync(filePath)) {
+    console.error('❌ File not found at:', filePath);
+    console.log('   __dirname is:', __dirname);
+    console.log('   Trying alternate path...');
+    
+    // Try without ../
+    const altPath = path.join(__dirname, 'public', 'data-protection-policy.html');
+    if (fs.existsSync(altPath)) {
+      return res.sendFile(altPath);
+    }
+    
+    return res.status(404).send('Privacy policy file not found');
+  }
+  
+  res.sendFile(filePath);
+};  
 // Directory paths (used for legacy tile saving - now tiles are downloaded directly by user)
 const TILES_DIR = path.join(__dirname, '../fetched_tiles');
 const SEGMENTATION_DIR = path.join(__dirname, '../segmentation_output');
