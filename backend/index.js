@@ -79,6 +79,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // Data protection policy page (clean URL)
 app.get('/privacy', (req, res) => {
+  console.log('🔍 Privacy route hit!');
   res.sendFile(path.join(__dirname, '../public', 'data-protection-policy.html'));
 });
 
