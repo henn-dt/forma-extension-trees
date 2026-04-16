@@ -77,16 +77,54 @@ setupAuth(app);
 // Serve static files from public folder (login.html, welcome.html, etc.)
 app.use(express.static(path.join(__dirname, '../public')));
 
+// Optional external data protection policy
+// - If DATA_POLICY_FILE_PATH is not set, policy is disabled.
+// - If set but file is missing, policy is also treated as disabled (fail-open).
+const getDataPolicyState = () => {
+  const configuredPath = process.env.DATA_POLICY_FILE_PATH;
+
+  if (!configuredPath || !configuredPath.trim()) {
+    return { enabled: false, reason: 'DATA_POLICY_FILE_PATH not set' };
+  }
+
+  const resolvedPath = path.resolve(configuredPath.trim());
+
+  if (!fs.existsSync(resolvedPath)) {
+    return { enabled: false, reason: `File not found: ${resolvedPath}` };
+  }
+
+  const stat = fs.statSync(resolvedPath);
+  if (!stat.isFile()) {
+    return { enabled: false, reason: `Configured path is not a file: ${resolvedPath}` };
+  }
+
+  return { enabled: true, filePath: resolvedPath };
+};
+
+// Frontend checks this endpoint to decide whether consent UI must be shown.
+app.get('/api/privacy-config', (req, res) => {
+  const policy = getDataPolicyState();
+
+  if (!policy.enabled) {
+    return res.json({ enabled: false });
+  }
+
+  res.json({
+    enabled: true,
+    url: '/privacy'
+  });
+});
+
 // Data protection policy page (clean URL)
 app.get('/privacy', (req, res) => {
-  const publicDir = path.join(__dirname, 'public');  // Same as line 84
-  const filePath = path.join(publicDir, 'data-protection-policy.html');
-  
-  console.log('🔍 Privacy route hit!');
-  console.log('   Public dir:', publicDir);
-  console.log('   Full path:', filePath);
-  
-  res.sendFile(filePath);
+  const policy = getDataPolicyState();
+
+  if (!policy.enabled) {
+    console.warn(`⚠️ Privacy route requested but no policy available: ${policy.reason}`);
+    return res.status(404).send('Data protection policy not configured.');
+  }
+
+  res.sendFile(policy.filePath);
 });
 
 // Directory paths (used for legacy tile saving - now tiles are downloaded directly by user)

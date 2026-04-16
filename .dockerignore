@@ -112,3 +112,6 @@ Dockerfile*
 
 # Root URN files (development/testing)
 rootUrn*.json
+
+# Optional external data protection policy (must not be baked into image)
+public/data-protection-policy.html

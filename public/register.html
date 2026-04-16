@@ -263,11 +263,11 @@
                 </div>
             </div>
 
-            <div class="consent-group">
+            <div class="consent-group" id="consentGroup" style="display: none;">
                 <label for="dataConsent">
                     <input type="checkbox" id="dataConsent">
                     <span>
-                        I have read and agree to the <a href="privacy" target="_blank" rel="noopener noreferrer" class="policy-link">data protection policy</a>.
+                        I have read and agree to the <a href="privacy" id="policyLink" target="_blank" rel="noopener noreferrer" class="policy-link">data protection policy</a>.
                     </span>
                 </label>
                 <div class="consent-error" id="consentError">You must agree to the data protection policy to create an account.</div>
@@ -298,8 +298,40 @@
         const errorDiv = document.getElementById('error');
         const submitBtn = document.getElementById('submitBtn');
 
+        const consentGroup = document.getElementById('consentGroup');
         const consentCheckbox = document.getElementById('dataConsent');
         const consentError = document.getElementById('consentError');
+        const policyLink = document.getElementById('policyLink');
+        let isPolicyRequired = false;
+
+        async function initPrivacyConsent() {
+            try {
+                const response = await fetch('api/privacy-config', {
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`privacy-config request failed (${response.status})`);
+                }
+
+                const config = await response.json();
+
+                if (config?.enabled) {
+                    isPolicyRequired = true;
+                    consentGroup.style.display = 'block';
+                    if (config.url) {
+                        policyLink.href = config.url;
+                    }
+                }
+            } catch (error) {
+                // Fail-open: if config endpoint is unavailable, registration remains possible.
+                console.warn('Privacy policy config unavailable. Consent checkbox disabled.', error);
+                isPolicyRequired = false;
+                consentGroup.style.display = 'none';
+            }
+        }
+
+        initPrivacyConsent();
 
         // Hide consent error when checkbox is checked
         consentCheckbox.addEventListener('change', () => {
@@ -318,7 +350,7 @@
             const password = document.getElementById('password').value;
             const confirmPassword = document.getElementById('confirmPassword').value;
 
-            if (!consentCheckbox.checked) {
+            if (isPolicyRequired && !consentCheckbox.checked) {
                 consentError.style.display = 'block';
                 return;
             }

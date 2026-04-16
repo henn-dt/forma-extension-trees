@@ -227,7 +227,7 @@ This extension uses **Directus** as the authentication and project management ba
 ### Authentication Flow
 
 ![Registration Page](./public/auth-reg.png)
-*New users can register with email and password. Registration includes a GDPR data consent checkbox — users must agree to the storage of their personal data before creating an account.*
+*New users can register with email and password. If a data protection policy file is configured at runtime, the registration page shows a mandatory consent checkbox linked to that policy. If no policy file is configured, signup works without the checkbox.*
 
 ![Login Page](./public/auth-page.png)
 *Existing users log in with their credentials. Password fields include a visibility toggle.*
@@ -276,7 +276,7 @@ This provides a simple local auth system for development and testing purposes.
 ### Step 1: Authentication
 
 1. Navigate to `http://localhost:3001` (or your deployed URL)
-2. **New users:** Click "Register", fill in your details, and accept the data consent checkbox
+2. **New users:** Click "Register" and fill in your details (and accept data policy checkbox only if policy is configured)
 3. **Existing users:** Enter your email and password to log in
 4. Click "Enter Application" on the welcome page
 
@@ -468,7 +468,7 @@ forma-extension-trees/
 │       └── build-ghcr.yml             # CI workflow (build & push images)
 ├── public/
 │   ├── login.html                     # Login page (with password toggle)
-│   ├── register.html                  # Registration page (with GDPR consent)
+│   ├── register.html                  # Registration page (conditional policy consent)
 │   ├── welcome.html                   # Welcome page
 │   └── forgot-password.html           # Password reset (placeholder)
 ├── Dockerfile                         # Backend + Frontend container
@@ -498,7 +498,39 @@ SESSION_COOKIE_SAMESITE=none          # Must be 'none' for cross-origin iframe
 PYTHON_API_URL=http://localhost:5001  # Default Python backend URL
 NODE_ENV=production                   # Set in Docker
 PORT=3001
+
+# Optional: External data policy HTML (absolute path inside container/runtime)
+# If set and file exists -> registration shows mandatory consent checkbox with /privacy link
+# If unset/missing     -> consent checkbox hidden
+# DATA_POLICY_FILE_PATH=/run/secrets/data-protection-policy.html
 ```
+
+### Optional External Data Protection Policy (Not in Repo / Not in Image)
+
+To keep the policy HTML out of both Git and the Docker image:
+
+1. Store the policy file on the deployment host (outside this repo), e.g.:
+   - `/opt/forma-secrets/data-protection-policy.html`
+2. Mount it read-only into the backend container.
+3. Set `DATA_POLICY_FILE_PATH` to the mounted in-container path.
+
+Sample (`docker-compose.production.yml`):
+
+```yaml
+forma-trees-backend:
+  environment:
+    - DATA_POLICY_FILE_PATH=/run/secrets/data-protection-policy.html
+  volumes:
+    - /opt/forma-secrets/data-protection-policy.html:/run/secrets/data-protection-policy.html:ro
+```
+
+Behavior:
+- `DATA_POLICY_FILE_PATH` set and file exists:
+  - `/privacy` serves the external HTML
+  - Register page shows mandatory consent checkbox
+- `DATA_POLICY_FILE_PATH` unset or file missing:
+  - `/privacy` returns `404`
+  - Register page hides checkbox and allows signup
 
 ## Docker Commands
 

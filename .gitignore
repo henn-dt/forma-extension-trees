@@ -114,3 +114,6 @@ nginx.conf.example
 
 # Docker
 .dockerignore
+
+# External/optional data protection policy (must never be committed)
+public/data-protection-policy.html
