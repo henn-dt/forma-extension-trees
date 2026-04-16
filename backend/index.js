@@ -77,28 +77,27 @@ setupAuth(app);
 // Serve static files from public folder (login.html, welcome.html, etc.)
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Optional external data protection policy
-// - If DATA_POLICY_FILE_PATH is not set, policy is disabled.
-// - If set but file is missing, policy is also treated as disabled (fail-open).
+// Optional external data protection policy URL
+// - If DATA_POLICY_URL is not set or invalid, policy is disabled.
 const getDataPolicyState = () => {
-  const configuredPath = process.env.DATA_POLICY_FILE_PATH;
+  const configuredUrl = process.env.DATA_POLICY_URL;
 
-  if (!configuredPath || !configuredPath.trim()) {
-    return { enabled: false, reason: 'DATA_POLICY_FILE_PATH not set' };
+  if (!configuredUrl || !configuredUrl.trim()) {
+    return { enabled: false, reason: 'DATA_POLICY_URL not set' };
   }
 
-  const resolvedPath = path.resolve(configuredPath.trim());
+  const candidate = configuredUrl.trim();
 
-  if (!fs.existsSync(resolvedPath)) {
-    return { enabled: false, reason: `File not found: ${resolvedPath}` };
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { enabled: false, reason: `Unsupported URL protocol: ${parsed.protocol}` };
+    }
+  } catch (error) {
+    return { enabled: false, reason: `Invalid DATA_POLICY_URL: ${candidate}` };
   }
 
-  const stat = fs.statSync(resolvedPath);
-  if (!stat.isFile()) {
-    return { enabled: false, reason: `Configured path is not a file: ${resolvedPath}` };
-  }
-
-  return { enabled: true, filePath: resolvedPath };
+  return { enabled: true, url: candidate };
 };
 
 // Frontend checks this endpoint to decide whether consent UI must be shown.
@@ -111,20 +110,8 @@ app.get('/api/privacy-config', (req, res) => {
 
   res.json({
     enabled: true,
-    url: '/privacy'
+    url: policy.url
   });
-});
-
-// Data protection policy page (clean URL)
-app.get('/privacy', (req, res) => {
-  const policy = getDataPolicyState();
-
-  if (!policy.enabled) {
-    console.warn(`⚠️ Privacy route requested but no policy available: ${policy.reason}`);
-    return res.status(404).send('Data protection policy not configured.');
-  }
-
-  res.sendFile(policy.filePath);
 });
 
 // Directory paths (used for legacy tile saving - now tiles are downloaded directly by user)

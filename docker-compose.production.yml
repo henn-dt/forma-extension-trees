@@ -40,11 +40,8 @@ services:
       - DIRECTUS_URL=${DIRECTUS_URL}
       - DIRECTUS_STATIC_TOKEN=${DIRECTUS_STATIC_TOKEN}
       - APP_URL=${APP_URL}
-      # Optional external data policy file path INSIDE container
-      - DATA_POLICY_FILE_PATH=${DATA_POLICY_FILE_PATH}
-    # Optional sample mount (uncomment to enable data policy):
-    # volumes:
-    #   - /absolute/host/path/data-protection-policy.html:/run/secrets/data-protection-policy.html:ro
+      # Optional: external data policy URL shown on register page
+      - DATA_POLICY_URL=${DATA_POLICY_URL}
     networks:
       - forma-network
 

@@ -227,7 +227,7 @@ This extension uses **Directus** as the authentication and project management ba
 ### Authentication Flow
 
 ![Registration Page](./public/auth-reg.png)
-*New users can register with email and password. If a data protection policy file is configured at runtime, the registration page shows a mandatory consent checkbox linked to that policy. If no policy file is configured, signup works without the checkbox.*
+*New users can register with email and password. If a data protection policy URL is configured at runtime, the registration page shows a mandatory consent checkbox linked to that URL. If no policy URL is configured, signup works without the checkbox.*
 
 ![Login Page](./public/auth-page.png)
 *Existing users log in with their credentials. Password fields include a visibility toggle.*
@@ -499,37 +499,31 @@ PYTHON_API_URL=http://localhost:5001  # Default Python backend URL
 NODE_ENV=production                   # Set in Docker
 PORT=3001
 
-# Optional: External data policy HTML (absolute path inside container/runtime)
-# If set and file exists -> registration shows mandatory consent checkbox with /privacy link
-# If unset/missing     -> consent checkbox hidden
-# DATA_POLICY_FILE_PATH=/run/secrets/data-protection-policy.html
+# Optional: External data policy URL
+# If set to a valid http/https URL -> registration shows mandatory consent checkbox with that link
+# If unset/invalid                  -> consent checkbox hidden
+# DATA_POLICY_URL=https://www.henn.com/privacy-policy
 ```
 
-### Optional External Data Protection Policy (Not in Repo / Not in Image)
+### Optional External Data Protection Policy URL
 
-To keep the policy HTML out of both Git and the Docker image:
+Configure the backend to link users to an existing externally hosted policy page:
 
-1. Store the policy file on the deployment host (outside this repo), e.g.:
-   - `/opt/forma-secrets/data-protection-policy.html`
-2. Mount it read-only into the backend container.
-3. Set `DATA_POLICY_FILE_PATH` to the mounted in-container path.
+1. Host your policy page on an existing website.
+2. Set `DATA_POLICY_URL` in your runtime environment.
 
 Sample (`docker-compose.production.yml`):
 
 ```yaml
 forma-trees-backend:
   environment:
-    - DATA_POLICY_FILE_PATH=/run/secrets/data-protection-policy.html
-  volumes:
-    - /opt/forma-secrets/data-protection-policy.html:/run/secrets/data-protection-policy.html:ro
+    - DATA_POLICY_URL=https://www.henn.com/privacy-policy
 ```
 
 Behavior:
-- `DATA_POLICY_FILE_PATH` set and file exists:
-  - `/privacy` serves the external HTML
+- `DATA_POLICY_URL` set and valid (`http`/`https`):
   - Register page shows mandatory consent checkbox
-- `DATA_POLICY_FILE_PATH` unset or file missing:
-  - `/privacy` returns `404`
+- `DATA_POLICY_URL` unset or invalid:
   - Register page hides checkbox and allows signup
 
 ## Docker Commands
