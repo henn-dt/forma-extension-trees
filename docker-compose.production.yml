@@ -65,7 +65,7 @@ services:
   # Nginx Gateway (Reverse Proxy for Backend and Static Files)
   # ===========================================================================
   nginx:
-    image: nginx:alpine
+    image: nginx:1.31.10-alpine
     container_name: forma-trees-nginx
     restart: always
     ports:
